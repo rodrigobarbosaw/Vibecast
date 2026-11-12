@@ -43,7 +43,7 @@ test('cadastro, teste de 14 dias, expiração e sessão', async () => {
   const base = 'http://localhost:31383';
   const server = spawn(process.execPath, ['server.js'], {
     env: { ...process.env, DATA_DIR: directory, PORT: '31383', HOST: '127.0.0.1',
-      APP_ORIGIN: base, STRIPE_SECRET_KEY: '', STRIPE_PRICE_ID: '', TMDB_READ_TOKEN: '' },
+      APP_ORIGIN: base, STRIPE_SECRET_KEY: '', STRIPE_PRICE_ID: '', TMDB_READ_TOKEN: '', PLAYDAHORA_DATABASE_URL: '' },
     stdio: ['ignore', 'pipe', 'inherit']
   });
   const exited = once(server, 'exit');

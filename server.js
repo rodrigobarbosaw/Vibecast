@@ -1,11 +1,10 @@
 import { createServer } from 'node:http';
-import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, scrypt, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
-import { mkdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { downloadSource } from './source-download.js';
 import { xtreamCatalog, xtreamEpisodes } from './xtream.js';
+import { openDatabase } from './database.js';
 
 const hashPassword = promisify(scrypt);
 const port = Number(process.env.PORT || 3000);
@@ -14,9 +13,7 @@ const allowed = new Set([origin, 'capacitor://localhost', 'https://localhost']);
 const secret = process.env.STRIPE_SECRET_KEY;
 const price = process.env.STRIPE_PRICE_ID;
 const day = 86400000;
-const directory = process.env.DATA_DIR || 'data';
-mkdirSync(directory, { recursive: true });
-const db = new DatabaseSync(directory + '/vibecast.sqlite');
+function initializeSqlite(db) {
 db.exec(`
   PRAGMA journal_mode = WAL;
   CREATE TABLE IF NOT EXISTS users (
@@ -46,6 +43,9 @@ if (!columns.some(column => column.name === 'source_name')) {
 if (!columns.some(column => column.name === 'source_mode')) {
   db.exec("ALTER TABLE users ADD COLUMN source_mode TEXT NOT NULL DEFAULT 'm3u'");
 }
+}
+const db = await openDatabase({ url: process.env.PLAYDAHORA_DATABASE_URL,
+  directory: process.env.DATA_DIR || 'data', initialize: initializeSqlite });
 const tokenHash = value => createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const random = () => randomBytes(32).toString('hex');
@@ -143,7 +143,7 @@ async function account(user) {
     const subscriptions = await stripe('subscriptions?' + params);
     if (subscriptions.data.some(item => item.items.data.some(line => line.price.id === price))) plan = 'paid';
   }
-  return { email: user.email, trialEnd: user.trial_end, plan, billing: Boolean(secret && price),
+  return { email: user.email, trialEnd: Number(user.trial_end), plan, billing: Boolean(secret && price),
     ...(plan !== 'expired' && publicSources(user)) };
 }
 
@@ -156,7 +156,7 @@ async function checkout(user) {
     let customer = user.customer;
     if (!customer) {
       customer = (await stripe('customers', { email: user.email }, 'customer-' + user.id)).id;
-      db.prepare('UPDATE users SET customer=? WHERE id=?').run(customer, user.id);
+      await db.run('UPDATE users SET customer=? WHERE id=?', customer, user.id);
     }
     let previous;
     if (user.checkout) {
@@ -171,7 +171,7 @@ async function checkout(user) {
       'line_items[0][quantity]': '1', success_url: origin + '/?checkout=success',
       cancel_url: origin + '/?checkout=cancel'
     }, 'checkout-' + user.id + '-' + (previous?.id || 'first'));
-    db.prepare('UPDATE users SET checkout=? WHERE id=?').run(session.id, user.id);
+    await db.run('UPDATE users SET checkout=? WHERE id=?', session.id, user.id);
     return { url: session.url };
   } finally {
     checkoutLocks.delete(user.id);
@@ -182,7 +182,8 @@ const attempts = new Map();
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of attempts) if (entry.until <= now) attempts.delete(key);
-  db.prepare('DELETE FROM sessions WHERE expires <= ?').run(now);
+  db.run('DELETE FROM sessions WHERE expires <= ?', now)
+    .catch(error => console.error('Falha ao limpar sessões:', error.code || error.name));
 }, 60000).unref();
 
 async function api(req, path) {
@@ -201,28 +202,28 @@ async function api(req, path) {
     const password = typeof data.password === 'string' ? data.password : '';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 ||
         password.length < 8 || password.length > 128) throw fail(400, 'Confira o e-mail e a senha de 8 a 128 caracteres.');
-    let user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
+    let user = await db.get('SELECT * FROM users WHERE email=?', email);
     if (route.endsWith('/register')) {
       if (user) throw fail(409, 'Este e-mail já tem uma conta.');
       const { name, mode, m3u, epg } = sourceSettings(data);
       const salt = random();
       const passwordHash = (await hashPassword(password, salt, 64)).toString('hex');
-      const result = db.prepare('INSERT OR IGNORE INTO users (id,email,salt,password,m3u,epg,trial_end,source_name,source_mode) VALUES (?,?,?,?,?,?,?,?,?)')
-        .run(random(), email, salt, passwordHash, m3u, epg, Date.now() + 14 * day, name, mode);
+      const result = await db.run('INSERT INTO users (id,email,salt,password,m3u,epg,trial_end,source_name,source_mode) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(email) DO NOTHING',
+        random(), email, salt, passwordHash, m3u, epg, Date.now() + 14 * day, name, mode);
       if (!result.changes) throw fail(409, 'Este e-mail já tem uma conta.');
-      user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
+      user = await db.get('SELECT * FROM users WHERE email=?', email);
     } else {
       const actual = await hashPassword(password, user?.salt || 'unknown-account', 64);
       if (!user || !timingSafeEqual(actual, Buffer.from(user.password, 'hex'))) throw fail(401, 'E-mail ou senha incorretos.');
     }
     const profile = await account(user);
     const token = random();
-    db.prepare('INSERT INTO sessions VALUES (?,?,?)').run(tokenHash(token), user.id, Date.now() + 30 * day);
+    await db.run('INSERT INTO sessions VALUES (?,?,?)', tokenHash(token), user.id, Date.now() + 30 * day);
     return { token, profile };
   }
   const token = tokenHash(req.headers.authorization?.replace(/^Bearer /, '') || '');
-  const user = db.prepare('SELECT users.* FROM users JOIN sessions ON users.id=sessions.user_id WHERE token=? AND expires>?')
-    .get(token, Date.now());
+  const user = await db.get('SELECT users.* FROM users JOIN sessions ON users.id=sessions.user_id WHERE token=? AND expires>?',
+    token, Date.now());
   if (!user) throw fail(401, 'Entre na sua conta.');
   const seriesId = req.method === 'GET' && /^\/api\/series\/(\d{1,20})$/.exec(path)?.[1];
   if (seriesId) {
@@ -239,16 +240,16 @@ async function api(req, path) {
   switch (route) {
     case 'GET /api/account': return account(user);
     case 'GET /api/channels': return {
-      favorites: db.prepare('SELECT channel FROM channel_favorites WHERE user_id=? ORDER BY rowid DESC').all(user.id).map(row => row.channel),
-      recent: db.prepare('SELECT channel FROM channel_history WHERE user_id=? ORDER BY watched DESC LIMIT 100').all(user.id).map(row => row.channel)
+      favorites: (await db.all('SELECT channel FROM channel_favorites WHERE user_id=? ORDER BY rowid DESC', user.id)).map(row => row.channel),
+      recent: (await db.all('SELECT channel FROM channel_history WHERE user_id=? ORDER BY watched DESC LIMIT 100', user.id)).map(row => row.channel)
     };
     case 'PUT /api/channels/favorite': {
       const data = await body(req);
       if (typeof data.channel !== 'string' || !data.channel.trim() || data.channel.length > 256 ||
           typeof data.favorite !== 'boolean') throw fail(400, 'Canal inválido.');
-      const sql = data.favorite ? 'INSERT OR IGNORE INTO channel_favorites VALUES (?,?)'
+      const sql = data.favorite ? 'INSERT INTO channel_favorites (user_id,channel) VALUES (?,?) ON CONFLICT(user_id,channel) DO NOTHING'
         : 'DELETE FROM channel_favorites WHERE user_id=? AND channel=?';
-      db.prepare(sql).run(user.id, data.channel);
+      await db.transaction(tx => tx.run(sql, user.id, data.channel), user.id);
       return {};
     }
     case 'PUT /api/channels/favorites/order': {
@@ -256,28 +257,23 @@ async function api(req, path) {
       if (!Array.isArray(order) || !order.length || order.some(key => typeof key !== 'string' || !key || key.length > 256) ||
           new Set(order).size !== order.length) throw fail(400, 'Ordem inválida.');
       const keys = new Set(order);
-      const remove = db.prepare('DELETE FROM channel_favorites WHERE rowid=?');
-      const insert = db.prepare('INSERT INTO channel_favorites (rowid,user_id,channel) VALUES (?,?,?)');
-      db.exec('BEGIN IMMEDIATE');
-      try {
-        const rows = db.prepare('SELECT rowid, channel FROM channel_favorites WHERE user_id=? ORDER BY rowid DESC').all(user.id);
+      return db.transaction(async tx => {
+        const rows = await tx.all('SELECT rowid, channel FROM channel_favorites WHERE user_id=? ORDER BY rowid DESC', user.id);
         const positions = rows.filter(row => keys.has(row.channel));
         if (positions.length !== order.length) throw fail(409, 'A lista de favoritos mudou. Atualize e tente novamente.');
-        for (const row of positions) remove.run(row.rowid);
-        positions.forEach((row, index) => insert.run(row.rowid, user.id, order[index]));
+        for (const row of positions) await tx.run('DELETE FROM channel_favorites WHERE rowid=?', row.rowid);
+        for (const [index, row] of positions.entries()) {
+          await tx.run('INSERT INTO channel_favorites (rowid,user_id,channel) VALUES (?,?,?)', row.rowid, user.id, order[index]);
+        }
         let index = 0;
         const favorites = rows.map(row => keys.has(row.channel) ? order[index++] : row.channel);
-        db.exec('COMMIT');
         return { favorites };
-      } catch (error) {
-        db.exec('ROLLBACK');
-        throw error;
-      }
+      }, user.id);
     }
     case 'GET /api/trending': return trendingMovies();
     case 'GET /api/activity': return {
-      progress: db.prepare('SELECT media_key AS key, position, duration, episode FROM playback WHERE user_id=? ORDER BY updated DESC LIMIT 200').all(user.id),
-      channels: db.prepare('SELECT channel FROM channel_views ORDER BY views DESC, channel').all().map(row => row.channel)
+      progress: await db.all('SELECT media_key AS key, position, duration, episode FROM playback WHERE user_id=? ORDER BY updated DESC LIMIT 200', user.id),
+      channels: (await db.all('SELECT channel FROM channel_views ORDER BY views DESC, channel')).map(row => row.channel)
     };
     case 'POST /api/activity': {
       const profile = await account(user);
@@ -286,9 +282,11 @@ async function api(req, path) {
       const history = typeof data.history === 'string' && data.history.length <= 256 &&
         /^(movie|series|music):.+$/u.test(data.history) ? data.history : null;
       if (data.channel && typeof data.channel === 'string' && data.channel.length <= 256) {
-        db.prepare('INSERT INTO channel_views VALUES (?,1) ON CONFLICT(channel) DO UPDATE SET views=views+1').run(data.channel);
-        db.prepare('INSERT INTO channel_history VALUES (?,?,?) ON CONFLICT(user_id,channel) DO UPDATE SET watched=excluded.watched')
-          .run(user.id, data.channel, Date.now());
+        await db.transaction(async tx => {
+          await tx.run('INSERT INTO channel_views VALUES (?,1) ON CONFLICT(channel) DO UPDATE SET views=channel_views.views+1', data.channel);
+          await tx.run('INSERT INTO channel_history VALUES (?,?,?) ON CONFLICT(user_id,channel) DO UPDATE SET watched=excluded.watched',
+            user.id, data.channel, Date.now());
+        });
       } else if (!history) {
         const { key, position, duration, episode } = data;
         if (typeof key !== 'string' || !/^(movie|series):.{1,500}$/u.test(key) || !Number.isFinite(position) ||
@@ -296,11 +294,11 @@ async function api(req, path) {
           throw fail(400, 'Progresso inválido.');
         }
         const episodeId = typeof episode === 'string' && /^\d{1,20}$/.test(episode) ? episode : null;
-        db.prepare('INSERT INTO playback VALUES (?,?,?,?,?,?) ON CONFLICT(user_id,media_key) DO UPDATE SET position=excluded.position,duration=excluded.duration,updated=excluded.updated,episode=excluded.episode')
-          .run(user.id, key, position, duration, Date.now(), episodeId);
+        await db.run('INSERT INTO playback VALUES (?,?,?,?,?,?) ON CONFLICT(user_id,media_key) DO UPDATE SET position=excluded.position,duration=excluded.duration,updated=excluded.updated,episode=excluded.episode',
+          user.id, key, position, duration, Date.now(), episodeId);
       }
-      if (history) db.prepare('INSERT INTO channel_history VALUES (?,?,?) ON CONFLICT(user_id,channel) DO UPDATE SET watched=excluded.watched')
-        .run(user.id, history, Date.now());
+      if (history) await db.run('INSERT INTO channel_history VALUES (?,?,?) ON CONFLICT(user_id,channel) DO UPDATE SET watched=excluded.watched',
+        user.id, history, Date.now());
       return {};
     }
     case 'GET /api/playlist':
@@ -327,14 +325,14 @@ async function api(req, path) {
       }
     }
     case 'POST /api/logout':
-      db.prepare('DELETE FROM sessions WHERE token=?').run(token);
+      await db.run('DELETE FROM sessions WHERE token=?', token);
       return {};
     case 'PUT /api/sources': {
       const profile = await account(user);
       if (profile.plan === 'expired') throw fail(402, 'Uma assinatura ativa é necessária.');
       const data = await body(req);
       const { name, mode, m3u, epg } = sourceSettings(data);
-      db.prepare('UPDATE users SET m3u=?, epg=?, source_name=?, source_mode=? WHERE id=?').run(m3u, epg, name, mode, user.id);
+      await db.run('UPDATE users SET m3u=?, epg=?, source_name=?, source_mode=? WHERE id=?', m3u, epg, name, mode, user.id);
       return { ...profile, ...publicSources({ m3u, epg, source_name: name, source_mode: mode }) };
     }
     case 'POST /api/checkout': return checkout(user);
