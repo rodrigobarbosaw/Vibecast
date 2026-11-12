@@ -135,6 +135,7 @@ function display(next) {
   }
   profile = next;
   $('auth').hidden = Boolean(next);
+  $('landing').hidden = $('public-nav').hidden = $('public-login').hidden = Boolean(next);
   $('account-actions').hidden = !next;
   $('settings').hidden = !active;
   $('settings').title = next?.sourceName || 'Minha lista';
@@ -765,15 +766,20 @@ async function play(item) {
   }
 }
 
-$('auth-toggle').onclick = () => {
-  signup = !signup;
+function setAuthMode(register) {
+  signup = register;
   $('auth-title').textContent = signup ? 'Comece seus 14 dias grátis' : 'Entre na sua conta';
   $('auth-submit').textContent = signup ? 'Criar conta' : 'Entrar';
   $('auth-toggle').textContent = signup ? 'Já tenho conta' : 'Quero criar conta';
   $('signup-sources').hidden = $('signup-sources').disabled = !signup;
   auth.elements.password.autocomplete = signup ? 'new-password' : 'current-password';
   $('auth-status').textContent = '';
-};
+}
+
+$('auth-toggle').onclick = () => setAuthMode(!signup);
+for (const link of document.querySelectorAll('[data-auth-mode]')) {
+  link.addEventListener('click', () => setAuthMode(link.dataset.authMode === 'signup'));
+}
 
 function submit(form, status, action) {
   form.addEventListener('submit', async event => {

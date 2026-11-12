@@ -13,10 +13,58 @@
 <script type="module" src="./app.js"></script>
 </head>
 <body>
-<header><a class="brand" href="./"><img src="./playdahora.png" alt="" width="38" height="38"><span>Play<span class="brand-accent">dahora</span></span></a><div id="account-actions" hidden><span id="plan"></span><button id="settings">Minha lista</button><button id="logout">Sair</button></div></header>
+<header><a class="brand" href="./"><img src="./playdahora.png" alt="" width="38" height="38"><span>Play<span class="brand-accent">dahora</span></span></a>
+<nav id="public-nav" aria-label="Navegação do site"><a href="#recursos">Recursos</a><a href="#plataformas">Plataformas</a><a href="#como-usar">Como usar</a><a href="#faq">FAQ</a><a href="#downloads">Downloads</a></nav>
+<a id="public-login" class="landing-button landing-secondary" href="#auth" data-auth-mode="login">Entrar</a>
+<div id="account-actions" hidden><span id="plan"></span><button id="settings">Minha lista</button><button id="logout">Sair</button></div></header>
 <main>
+<div id="landing">
+  <section class="landing-hero" aria-labelledby="landing-title">
+    <div><p class="accent">PLAYER IPTV</p><h1 id="landing-title">Sua lista.<br><em>Sua hora de dar o play.</em></h1>
+      <p class="landing-lead">Canais ao vivo, filmes, séries e músicas da sua lista em um só lugar.</p>
+      <div class="landing-actions"><a class="landing-button" href="#auth" data-auth-mode="signup">Começar 14 dias grátis</a><a class="landing-button landing-secondary" href="#downloads">Ver downloads</a></div>
+    </div>
+    <div class="landing-screen" aria-hidden="true"><div class="landing-screen-top"><img src="./playdahora.png" alt="" width="25" height="25"><strong>Playdahora</strong><span>Ao vivo</span></div><div class="landing-screen-player"><span>▶</span></div><div class="landing-screen-menu"><span>Canais</span><span>Filmes</span><span>Séries</span><span>Músicas</span></div></div>
+  </section>
+  <section class="landing-section" id="recursos">
+    <h2>Recursos do Playdahora</h2>
+    <div class="landing-grid">
+      <article><h3>Suas listas M3U e Xtream Codes</h3><p>Conecte o seu provedor e navegue por canais, filmes, séries e músicas.</p></article>
+      <article><h3>Guia de programação</h3><p>Consulte o EPG abaixo do player de canais quando seu provedor oferecer os dados.</p></article>
+      <article><h3>Favoritos na sua ordem</h3><p>Marque o que gosta e organize os canais favoritos na ordem em que quer vê-los.</p></article>
+      <article><h3>Continue de onde parou</h3><p>Retome filmes e episódios pelo histórico de reprodução da sua conta.</p></article>
+    </div>
+  </section>
+  <section class="landing-section" id="plataformas">
+    <h2>Plataformas</h2>
+    <div class="landing-grid">
+      <article><h3>Navegador</h3><p>Use o player web no computador, no celular ou no tablet, com uma lista compatível.</p><a href="#auth" data-auth-mode="login">Abrir o player web</a></article>
+      <article><h3>Android e iOS</h3><p>Os aplicativos estão em desenvolvimento. Veja a disponibilidade na seção de downloads.</p><a href="#downloads">Ver disponibilidade</a></article>
+    </div>
+  </section>
+  <section class="landing-section" id="como-usar">
+    <h2>Como usar</h2>
+    <ol class="landing-steps">
+      <li><strong>Crie sua conta.</strong> Informe seu e-mail e escolha uma senha para o Playdahora.</li>
+      <li><strong>Conecte sua lista.</strong> Use o link M3U ou preencha servidor, usuário e senha Xtream. O link do EPG é opcional.</li>
+      <li><strong>Escolha o que assistir.</strong> Abra a biblioteca, explore as categorias e salve seus favoritos.</li>
+    </ol>
+  </section>
+  <section class="landing-section" id="faq">
+    <h2>Perguntas frequentes</h2>
+    <details><summary>O Playdahora inclui canais ou filmes?</summary><p>Você usa a sua própria lista de um provedor para o qual tem autorização de acesso.</p></details>
+    <details><summary>Quais listas posso usar?</summary><p>O player aceita links M3U e credenciais Xtream Codes. A reprodução na web depende do formato dos streams e do acesso permitido pelo provedor.</p></details>
+    <details><summary>Como funcionam os 14 dias grátis?</summary><p>O teste começa ao criar a conta, sem exigir cartão. Ao final do período, a reprodução exige uma assinatura ativa.</p></details>
+    <details><summary>Como altero minha lista ou o EPG?</summary><p>Entre na conta e abra <strong>Minha lista</strong> para editar e salvar os dados.</p></details>
+  </section>
+  <section class="landing-section landing-download" id="downloads">
+    <h2>Downloads</h2>
+    <p>O player web já pode ser aberto no navegador. Os instaladores para Android e iOS ainda não estão publicados.</p>
+    <a class="landing-button" href="#auth" data-auth-mode="login">Abrir o player web</a>
+  </section>
+</div>
 <section id="auth" class="welcome">
-<div class="intro"><h1>Dê o play.<br><em>A hora é sua.</em></h1><p>Assista aos canais ao vivo, filmes e séries da sua lista. Ouça músicas e confira a programação em um só lugar.</p></div>
+<div class="intro"><h2>Acesse o Playdahora</h2><p>Entre na sua conta ou comece seu período de teste.</p></div>
 <form id="auth-form" class="panel">
 <h2 id="auth-title">Comece seus 14 dias grátis</h2>
 <label>E-mail<input name="email" type="email" autocomplete="email" required></label>
