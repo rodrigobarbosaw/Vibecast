@@ -43,7 +43,7 @@ export async function downloadSource(value, redirects = 0, signal = AbortSignal.
   if (response.statusCode !== 200) {
     response.destroy();
     if (response.statusCode === 403) {
-      throw error('O provedor recusou o acesso ao link (HTTP 403). Confira se o link está ativo ou importe o arquivo baixado do provedor.');
+      throw Object.assign(error('O provedor recusou o acesso ao link (HTTP 403). Confira se o link está ativo ou importe o arquivo baixado do provedor.'), { upstreamStatus: 403 });
     }
     throw error('A fonte respondeu com HTTP ' + response.statusCode + '. Confira o link com o provedor.');
   }

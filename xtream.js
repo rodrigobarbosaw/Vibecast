@@ -5,7 +5,7 @@ function error(message, status = 502) {
 }
 
 function connection(playlist) {
-  const base = new URL('.', playlist);
+  let base = new URL('.', playlist);
   const params = new URL(playlist).searchParams;
   const username = params.get('username');
   const password = params.get('password');
@@ -18,6 +18,22 @@ function connection(playlist) {
         return JSON.parse(text);
       } catch {
         throw error('O provedor não retornou dados válidos pela API Xtream.');
+      }
+    },
+    async login() {
+      try {
+        return await this.query();
+      } catch (failure) {
+        if (failure.upstreamStatus !== 403) throw failure;
+        if (base.protocol === 'http:' && !base.port) {
+          base.protocol = 'https:';
+          try {
+            return await this.query();
+          } catch {
+            base.protocol = 'http:';
+          }
+        }
+        throw error('O servidor IPTV recusou a conexão Xtream (HTTP 403) antes de enviar o catálogo. Você pode importar um arquivo M3U nesta tela.');
       }
     },
     stream(type, id, extension) {
@@ -40,7 +56,7 @@ function logo(value) {
 
 export async function xtreamCatalog(playlist) {
   const provider = connection(playlist);
-  const login = await provider.query();
+  const login = await provider.login();
   if (String(login?.user_info?.auth) !== '1') throw error('O provedor recusou o usuário ou a senha IPTV.', 422);
   if (login.user_info.status && login.user_info.status.toLowerCase() !== 'active') {
     throw error('A conta IPTV está inativa no provedor.', 422);
@@ -75,7 +91,11 @@ export async function xtreamCatalog(playlist) {
 export async function xtreamEpisodes(playlist, id) {
   if (!identifier(id)) throw error('Série inválida.', 400);
   const provider = connection(playlist);
-  const result = await provider.query('get_series_info', { series_id: id });
+  const result = await provider.query('get_series_info', { series_id: id }).catch(async failure => {
+    if (failure.upstreamStatus !== 403) throw failure;
+    await provider.login();
+    return provider.query('get_series_info', { series_id: id });
+  });
   const seasons = result?.episodes;
   if (!seasons || typeof seasons !== 'object') throw error('O provedor não retornou os episódios desta série.');
   return Object.entries(seasons).flatMap(([season, episodes]) => {
