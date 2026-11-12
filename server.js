@@ -44,8 +44,15 @@ if (!columns.some(column => column.name === 'source_mode')) {
   db.exec("ALTER TABLE users ADD COLUMN source_mode TEXT NOT NULL DEFAULT 'm3u'");
 }
 }
-const db = await openDatabase({ url: process.env.PLAYDAHORA_DATABASE_URL,
-  directory: process.env.DATA_DIR || 'data', initialize: initializeSqlite });
+let connection;
+function database() {
+  connection ??= openDatabase({ url: process.env.PLAYDAHORA_DATABASE_URL,
+    directory: process.env.DATA_DIR || 'data', initialize: initializeSqlite }).catch(error => {
+    connection = undefined;
+    throw error;
+  });
+  return connection;
+}
 const tokenHash = value => createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const random = () => randomBytes(32).toString('hex');
@@ -147,7 +154,7 @@ async function account(user) {
     ...(plan !== 'expired' && publicSources(user)) };
 }
 
-async function checkout(user) {
+async function checkout(user, db) {
   if (!secret || !price) throw fail(503, 'Configure o Stripe para ativar assinaturas.');
   if (checkoutLocks.has(user.id)) throw fail(409, 'Já existe uma solicitação em andamento.');
   checkoutLocks.add(user.id);
@@ -179,18 +186,23 @@ async function checkout(user) {
 }
 
 const attempts = new Map();
-setInterval(() => {
+let nextAttemptCleanup = 0;
+if (import.meta.main) setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of attempts) if (entry.until <= now) attempts.delete(key);
-  db.run('DELETE FROM sessions WHERE expires <= ?', now)
+  database().then(db => db.run('DELETE FROM sessions WHERE expires <= ?', now))
     .catch(error => console.error('Falha ao limpar sessões:', error.code || error.name));
 }, 60000).unref();
 
 async function api(req, path) {
+  const db = await database();
   const route = req.method + ' ' + path;
   if (route === 'POST /api/register' || route === 'POST /api/login') {
     const ip = req.socket.remoteAddress;
     const now = Date.now();
+    if (now >= nextAttemptCleanup) {
+      for (const [key, attempt] of attempts) if (attempt.until <= now) attempts.delete(key);
+      nextAttemptCleanup = now + 60000;
+    }
     let entry = attempts.get(ip);
     if (!entry || entry.until <= now) {
       entry = { count: 0, until: now + 60000 };
@@ -335,7 +347,7 @@ async function api(req, path) {
       await db.run('UPDATE users SET m3u=?, epg=?, source_name=?, source_mode=? WHERE id=?', m3u, epg, name, mode, user.id);
       return { ...profile, ...publicSources({ m3u, epg, source_name: name, source_mode: mode }) };
     }
-    case 'POST /api/checkout': return checkout(user);
+    case 'POST /api/checkout': return checkout(user, db);
     default: throw fail(404, 'Rota inexistente.');
   }
 }
@@ -350,6 +362,33 @@ const assets = new Map([
   ['/hls.js', ['node_modules/hls.js/dist/hls.min.js', 'text/javascript']]
 ]);
 
+export async function handleApi(req, path) {
+  const headers = {
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'Cache-Control': 'no-store'
+  };
+  try {
+    if (req.headers.origin) {
+      if (!allowed.has(req.headers.origin)) throw fail(403, 'Origem não permitida.');
+      headers['Access-Control-Allow-Origin'] = req.headers.origin;
+      headers.Vary = 'Origin';
+    }
+    if (req.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: { ...headers,
+        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS' } });
+    }
+    return Response.json(await api(req, path), { headers });
+  } catch (error) {
+    if (!error.status) console.error('Falha na API:', error.code || error.name);
+    return Response.json({ error: error.status ? error.message : 'Serviço temporariamente indisponível.' },
+      { status: error.status || 500, headers });
+  }
+}
+
+if (import.meta.main) {
+await database();
 createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -357,18 +396,9 @@ createServer(async (req, res) => {
   try {
     const path = new URL(req.url, origin).pathname;
     if (path.startsWith('/api/')) {
-      if (req.headers.origin) {
-        if (!allowed.has(req.headers.origin)) throw fail(403, 'Origem não permitida.');
-        res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
-        res.setHeader('Vary', 'Origin');
-      }
-      if (req.method === 'OPTIONS') {
-        res.writeHead(204, { 'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS' }).end();
-        return;
-      }
-      const data = await api(req, path);
-      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(data));
+      const response = await handleApi(req, path);
+      res.writeHead(response.status, Object.fromEntries(response.headers))
+        .end(Buffer.from(await response.arrayBuffer()));
       return;
     }
     const asset = assets.get(path);
@@ -381,3 +411,4 @@ createServer(async (req, res) => {
       .end(JSON.stringify({ error: error.status ? error.message : 'Serviço temporariamente indisponível.' }));
   }
 }).listen(port, process.env.HOST || '127.0.0.1', () => console.log('Playdahora em ' + origin));
+}

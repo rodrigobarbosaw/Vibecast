@@ -80,9 +80,6 @@ async function loadHome() {
 }
 
 async function api(path, method = 'GET', data) {
-  if (!apiOrigin && location.hostname.endsWith('.netlify.app')) {
-    throw Error('O servidor do Playdahora ainda precisa ser configurado para este site.');
-  }
   const headers = {};
   if (token) headers.Authorization = 'Bearer ' + token;
   if (data) headers['Content-Type'] = 'application/json';

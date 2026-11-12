@@ -21,13 +21,15 @@ A separação em **Ao vivo**, **Filmes**, **Séries** e **Músicas** usa os grup
 
 Conecte a branch `main` ao Netlify. O arquivo `netlify.toml` executa `npm run build` e publica `dist`, onde o build coloca o `index.html` e os arquivos do player.
 
-Para cadastro, login e biblioteca funcionarem, execute `npm start` em um serviço Node.js 24 com HTTPS. No backend, defina `HOST=0.0.0.0`, `APP_ORIGIN=https://playdahora.netlify.app` e a conexão PostgreSQL indicada abaixo. No Netlify, configure `PLAYDAHORA_API_ORIGIN` com a origem HTTPS do backend, sem caminho ou barra final, e faça um novo deploy. Configure as chaves Stripe e TMDB no backend.
+O Netlify também publica a função que atende às rotas `/api/...`. Em **Project configuration → Environment variables**, configure `APP_ORIGIN=https://playdahora.netlify.app` e a variável privada `PLAYDAHORA_DATABASE_URL` com a conexão PostgreSQL indicada abaixo. Se o painel permitir escolher o escopo, inclua **Functions**. Configure as chaves Stripe e TMDB no mesmo painel quando precisar desses recursos.
+
+Deixe `PLAYDAHORA_API_ORIGIN` vazia no Netlify para que a interface chame a API no próprio site. Depois de salvar as variáveis, faça um novo deploy.
 
 ## Banco Supabase
 
 A migração em `supabase/migrations` cria o schema privado `playdahora`, com contas, sessões, favoritos, histórico, progresso e ranking. As tabelas usam RLS e ficam acessíveis ao backend por conexão PostgreSQL.
 
-No painel do projeto `ssoinushzcndapeklcjp`, abra **Connect** e copie a URI de conexão direta (IPv6) ou do **Session pooler** (IPv4). Substitua o campo de senha e guarde a URI como `PLAYDAHORA_DATABASE_URL` nas variáveis privadas do backend. Para desenvolvimento local, deixe essa variável vazia para continuar usando o SQLite. O PostgreSQL começa vazio e não importa automaticamente contas ou dados do SQLite.
+No painel do projeto `ssoinushzcndapeklcjp`, abra **Connect** e copie a URI do **Transaction pooler** para usar no Netlify. Substitua o campo de senha e guarde a URI como `PLAYDAHORA_DATABASE_URL` nas variáveis privadas do Netlify. Para desenvolvimento local, deixe essa variável vazia para continuar usando o SQLite. O PostgreSQL começa vazio e não importa automaticamente contas ou dados do SQLite.
 
 ## Assinatura web
 
