@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import pg from 'pg';
+import supabaseCA from './supabase/database-ca.js';
 
 function postgresQueries(client) {
   function query(sql, args) {
@@ -20,9 +21,15 @@ function postgresQueries(client) {
 
 export async function openDatabase({ url, directory, initialize }) {
   if (url) {
+    const connection = new URL(url);
+    const host = connection.hostname;
+    const isSupabase = host.endsWith('.pooler.supabase.com') || /^db\.[a-z0-9]+\.supabase\.co$/.test(host);
+    if (isSupabase) {
+      for (const key of ['ssl', 'sslmode', 'sslrootcert', 'sslcert', 'sslkey']) connection.searchParams.delete(key);
+    }
     const pool = new pg.Pool({
-      connectionString: url,
-      ssl: { rejectUnauthorized: true },
+      connectionString: connection.href,
+      ssl: { rejectUnauthorized: true, ...(isSupabase && { ca: supabaseCA }) },
       max: 5,
       connectionTimeoutMillis: 10000
     });
