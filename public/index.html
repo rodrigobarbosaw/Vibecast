@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101115">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: http:; media-src 'self' https: http: blob:; connect-src 'self' https: http:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>VibeCast</title>
+<link rel="stylesheet" href="./style.css">
+<script defer src="./hls.js"></script>
+<script type="module" src="./app.js"></script>
+</head>
+<body>
+<header><a class="brand" href="./"><span aria-hidden="true">▶</span> VibeCast</a><div id="account-actions" hidden><span id="plan"></span><button id="settings">Minha lista</button><button id="logout">Sair</button></div></header>
+<main>
+<section id="auth" class="welcome">
+<div class="intro"><p class="accent">SEU PLAYER IPTV</p><h1>Sua programação, do seu jeito.</h1><p>Assista aos canais ao vivo, filmes e séries da sua lista. Ouça músicas e confira a programação em um só lugar.</p></div>
+<form id="auth-form" class="panel">
+<h2 id="auth-title">Comece seus 14 dias grátis</h2>
+<label>E-mail<input name="email" type="email" autocomplete="email" required></label>
+<label>Senha<input name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label>
+<fieldset id="signup-sources" class="source-fields"></fieldset>
+<button class="primary" id="auth-submit">Criar conta</button>
+<button type="button" id="auth-toggle">Já tenho conta</button>
+<p role="status" id="auth-status"></p>
+</form>
+</section>
+<section id="expired" class="panel paywall" hidden>
+<h1>Seu teste terminou</h1><p>Assine para voltar a assistir à sua programação.</p>
+<button class="primary" id="subscribe">Assinar</button>
+<button id="recheck">Verificar acesso</button>
+<p id="billing-status" role="status"></p>
+</section>
+<section id="library" hidden>
+<div class="library-title"><h1 id="library-heading">Início</h1><button id="reload">Atualizar lista</button></div>
+<nav aria-label="Menu principal" id="categories"></nav>
+<div id="home"></div>
+<div id="catalog-layout">
+<aside id="channel-sidebar" hidden><details id="channel-details" open><summary id="sidebar-title">Menu de canais</summary><nav id="channel-filters" aria-label="Filtros da biblioteca"></nav></details></aside>
+<div id="catalog-content">
+<div id="category-view" hidden>
+<div class="filters"><input id="search" type="search" aria-label="Buscar na categoria" placeholder="Buscar na categoria"></div>
+</div>
+<p id="catalog-status" role="status"></p>
+<div id="favorite-editor" hidden><button id="edit-favorites" type="button">Editar posições</button><button id="confirm-favorites" type="button" class="primary" hidden>OK</button><button id="cancel-favorites" type="button" hidden>Cancelar</button><p id="favorite-instructions" role="status"></p></div>
+<div id="file-import" hidden><button type="button" id="choose-file">Importar arquivo M3U</button><input id="playlist-file" type="file" accept=".m3u,.m3u8" hidden></div>
+<div id="cards"></div><button id="more" hidden>Mostrar mais</button>
+</div>
+<section id="live-screen" aria-labelledby="live-heading" hidden>
+<h2 id="live-heading">Player</h2>
+<p id="live-placeholder">Selecione um item na lista para reproduzir.</p>
+<div id="live-player-slot"></div>
+</section>
+</div>
+<details id="credits" hidden><summary>Créditos</summary><a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer"><img alt="The Movie Database" src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg" loading="lazy"></a><p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p></details>
+</section>
+</main>
+<dialog id="player"><div id="player-content"><div class="dialog-top"><h2 id="player-title"></h2><button type="button" id="close-player" data-close="player" aria-label="Fechar player">✕</button></div><video id="video" playsinline controls></video><audio id="audio" controls hidden></audio><div id="live-controls" hidden><button id="live-toggle" type="button">Reproduzir</button><button id="live-skip" type="button" disabled>Avançar 30 s</button><button id="live-mute" type="button" aria-pressed="false">Silenciar</button><label>Volume<input id="live-volume" type="range" min="0" max="1" step="0.05" value="1"></label><button id="live-fullscreen" type="button">Tela cheia</button></div><p id="play-status" role="status"></p><div id="guide"></div></div></dialog>
+<dialog id="episodes" aria-labelledby="episodes-title"><div id="episodes-content"><div class="dialog-top"><h2 id="episodes-title"></h2><button type="button" id="close-episodes" aria-label="Fechar episódios">✕</button></div><p id="episodes-status" role="status"></p><div id="episode-list"></div></div></dialog>
+<dialog id="sources"><form id="source-form"><div class="dialog-top"><h2>Minha lista</h2><button type="button" data-close="sources" aria-label="Fechar configurações">✕</button></div><fieldset id="edit-sources" class="source-fields"></fieldset><button class="primary">Salvar lista</button><p id="source-status" role="status"></p></form></dialog>
+<template id="source-fields">
+<label>Nome da lista <small>(opcional)</small><input name="sourceName" maxlength="100"></label>
+<label>Forma de conexão<select name="sourceMode"><option value="xtream">Servidor, usuário e senha (Xtream Codes)</option><option value="m3u">Link M3U</option></select></label>
+<fieldset data-mode="xtream" class="source-fields">
+<label>Servidor IPTV<input name="providerServer" type="url" placeholder="http://provedor.com:8080" required></label>
+<label>Usuário IPTV<input name="providerUser" maxlength="256" autocomplete="off" required></label>
+<label>Senha IPTV<input name="providerPassword" type="password" maxlength="256" autocomplete="new-password" required></label>
+</fieldset>
+<fieldset data-mode="m3u" class="source-fields" hidden disabled>
+<label>Link da lista M3U<input name="m3u" type="url" placeholder="https://provedor.com/lista.m3u" required></label>
+</fieldset>
+<label>Link do guia EPG <small>(opcional)</small><input name="epg" type="url" placeholder="https://provedor.com/guia.xml"></label>
+</template>
+</body>
+</html>
