@@ -31,7 +31,8 @@ export async function openDatabase({ url, directory, initialize }) {
       await pool.query('SELECT 1 FROM playdahora.users LIMIT 1');
     } catch (error) {
       await pool.end();
-      throw new Error('Não foi possível conectar ao PostgreSQL do Playdahora (' + (error.code || error.name) + ').');
+      const code = /^[A-Z0-9_]+$/.test(error.code || '') ? error.code : 'DB_CONNECT_FAILED';
+      throw Object.assign(new Error('Não foi possível conectar ao PostgreSQL do Playdahora.'), { code });
     }
     return {
       ...postgresQueries(pool),
