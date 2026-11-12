@@ -6,7 +6,17 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { DatabaseSync } from 'node:sqlite';
-import { parseM3u } from '../public/catalog.js';
+import { adultContent, adultsLast, parseM3u } from '../public/catalog.js';
+
+test('mantém a ordem dos itens gerais e move conteúdo adulto para o fim', () => {
+  const items = [
+    { title: 'Canal 1', adult: '1' }, { title: 'Notícias' },
+    { title: 'Título 2', group: 'Filmes Eróticos' }, { title: 'Clube 18' },
+    { title: 'Título 3', group: 'Séries +18' }, { title: 'Futebol' }
+  ];
+  assert.deepEqual(adultsLast(items, adultContent).map(item => item.title),
+    ['Notícias', 'Clube 18', 'Futebol', 'Canal 1', 'Título 2', 'Título 3']);
+});
 
 test('importa os quatro tipos, URLs relativas e EPG do cabeçalho', () => {
   const result = parseM3u(`#EXTM3U x-tvg-url="guide.xml"

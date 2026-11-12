@@ -62,7 +62,7 @@ export async function xtreamCatalog(playlist) {
       const group = names.get(String(entry.category_id)) || '';
       const title = String(entry.name || 'Sem título');
       const category = definition.kind !== 'series' && music.test(group) ? 'music' : definition.kind;
-      const item = { title, category, group, added: Number(entry.added || entry.last_modified) || 0,
+      const item = { title, category, group, adult: entry.is_adult, added: Number(entry.added || entry.last_modified) || 0,
         logo: logo(entry.stream_icon || entry.cover) };
       if (definition.kind === 'series') return [{ ...item, seriesId: String(id) }];
       const extension = definition.kind === 'live' ? 'm3u8' : safeExtension(entry.container_extension);

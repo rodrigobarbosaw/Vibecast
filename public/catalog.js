@@ -1,5 +1,22 @@
 export const categories = { live: 'Ao vivo', movie: 'Filmes', series: 'Séries', music: 'Músicas' };
 
+export function adultLabel(value = '') {
+  const label = String(value).normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  return /\b(?:adult[oa]s?|adult|xxx|porno(?:grafia)?|erotic[oa]s?|erotico|hentai)\b|(?:^|\W)\+\s*18\b|\b18\s*\+/.test(label);
+}
+
+export function adultContent(item) {
+  return item.adult === true || item.adult === 1 || item.adult === '1' ||
+    adultLabel(item.group) || /^(?:\s|[\[({|•-])*(?:xxx\b|adult[oa]s?\s*[:|\]-]|\+18\b|18\+)/i.test(item.title || '');
+}
+
+export function adultsLast(items, isAdult = item => item.adult) {
+  const general = [];
+  const adult = [];
+  for (const item of items) (isAdult(item) ? adult : general).push(item);
+  return general.concat(adult);
+}
+
 export function mediaUrl(raw, base) {
   try {
     const url = new URL(raw, base);
@@ -32,6 +49,7 @@ export function parseM3u(raw, base) {
       const [prefix, ...rest] = value.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
       for (const match of prefix.matchAll(/([\w-]+)="([^"]*)"/g)) attributes[match[1].toLowerCase()] = match[2];
       metadata = { title: rest.join(',').trim(), group: attributes['group-title'] || '',
+        adult: attributes['is-adult'] === '1' || attributes['adult'] === '1' || attributes['adult'] === 'true',
         id: attributes['tvg-id'] || '', logo: attributes['tvg-logo'] ? mediaUrl(attributes['tvg-logo'], base) : '' };
     } else if (metadata && value.startsWith('#EXTGRP:')) {
       metadata.group ||= value.slice(8).trim();

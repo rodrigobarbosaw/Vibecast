@@ -3,19 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#101115">
+<meta name="theme-color" content="#171013">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: http:; media-src 'self' https: http: blob:; connect-src 'self' https: http:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>VibeCast</title>
+<title>Playdahora</title>
+<link rel="icon" type="image/png" href="./playdahora.png">
 <link rel="stylesheet" href="./style.css">
 <script defer src="./hls.js"></script>
 <script type="module" src="./app.js"></script>
 </head>
 <body>
-<header><a class="brand" href="./"><span aria-hidden="true">▶</span> VibeCast</a><div id="account-actions" hidden><span id="plan"></span><button id="settings">Minha lista</button><button id="logout">Sair</button></div></header>
+<header><a class="brand" href="./"><img src="./playdahora.png" alt="" width="38" height="38"><span>Play<span class="brand-accent">dahora</span></span></a><div id="account-actions" hidden><span id="plan"></span><button id="settings">Minha lista</button><button id="logout">Sair</button></div></header>
 <main>
 <section id="auth" class="welcome">
-<div class="intro"><p class="accent">SEU PLAYER IPTV</p><h1>Sua programação, do seu jeito.</h1><p>Assista aos canais ao vivo, filmes e séries da sua lista. Ouça músicas e confira a programação em um só lugar.</p></div>
+<div class="intro"><h1>Dê o play.<br><em>A hora é sua.</em></h1><p>Assista aos canais ao vivo, filmes e séries da sua lista. Ouça músicas e confira a programação em um só lugar.</p></div>
 <form id="auth-form" class="panel">
 <h2 id="auth-title">Comece seus 14 dias grátis</h2>
 <label>E-mail<input name="email" type="email" autocomplete="email" required></label>

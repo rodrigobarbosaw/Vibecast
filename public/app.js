@@ -1,5 +1,5 @@
 import { apiOrigin } from './config.js';
-import { categories, parseM3u, parseEpg } from './catalog.js';
+import { adultContent, adultLabel, adultsLast, categories, parseM3u, parseEpg } from './catalog.js';
 
 const $ = id => document.getElementById(id);
 const store = localStorage;
@@ -37,6 +37,7 @@ let channelGroup = '';
 let playRequest = 0;
 const pendingFavorites = new Set();
 let favoriteDraft;
+let adultFavorites = new Set();
 let pickedFavorite;
 let savingFavorites = false;
 
@@ -87,7 +88,7 @@ async function api(path, method = 'GET', data) {
     response = await fetch(apiOrigin + '/api/' + path, { method, headers,
       body: data ? JSON.stringify(data) : undefined, signal: AbortSignal.timeout(50000) });
   } catch {
-    throw Error('Não foi possível conectar ao VibeCast.');
+    throw Error('Não foi possível conectar ao Playdahora.');
   }
   const payload = await response.json();
   if (!response.ok) throw Object.assign(Error(payload.error), { status: response.status });
@@ -198,7 +199,7 @@ async function loadCatalog(file) {
     const playlist = file ? { text: await file.text(), url: profile.m3u } : await api('playlist');
     if (current.signal.aborted) return;
     const parsed = Array.isArray(playlist.items) ? playlist : parseM3u(playlist.text, playlist.url);
-    catalog = parsed.items;
+    catalog = parsed.items.map(item => ({ ...item, adult: adultContent(item) }));
     render();
     const epg = profile.epg || parsed.epg;
     if (!epg) return;
@@ -289,8 +290,8 @@ function render() {
   } else if (channelFilter === 'group') {
     source = catalog.filter(item => item.category === category && (item.group || '') === channelGroup);
   }
-  const items = source.filter(item => item.category === category &&
-    (item.title.toLowerCase().includes(search) || item.group.toLowerCase().includes(search)));
+  const items = adultsLast(source.filter(item => item.category === category &&
+    (item.title.toLowerCase().includes(search) || item.group.toLowerCase().includes(search))));
   $('catalog-status').textContent = items.length ? items.length + (items.length === 1 ? ' item' : ' itens') : 'Nenhum item nesta categoria.';
   $('edit-favorites').disabled = !items.length;
   $('cards').replaceChildren(...(editing ? items.map(editableChannel) : items.slice(0, limit).map(item => channelCard(item))));
@@ -318,8 +319,14 @@ function renderChannelFilters() {
   option('Favoritos', 'favorites');
   option('Assistidos recentemente', 'recent');
   option(({ live: 'Todos os canais', movie: 'Todos os filmes', series: 'Todas as séries', music: 'Todas as músicas' })[category], 'all');
-  const groups = new Set(catalog.filter(item => item.category === category).map(item => item.group || ''));
-  for (const group of [...groups].sort((a, b) => a.localeCompare(b, 'pt-BR'))) {
+  const groups = new Map();
+  for (const item of catalog) {
+    if (item.category !== category) continue;
+    const group = item.group || '';
+    groups.set(group, (groups.get(group) ?? true) && item.adult);
+  }
+  const sorted = [...groups.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  for (const group of adultsLast(sorted, name => adultLabel(name) || groups.get(name))) {
     option(group || 'Sem categoria', 'group', group);
   }
   nav.replaceChildren(fragment);
@@ -381,6 +388,7 @@ function editableChannel(item) {
 function placeFavorite(key, index) {
   const from = favoriteDraft.indexOf(key);
   if (from < 0 || index < 0 || index >= favoriteDraft.length) return;
+  if (adultFavorites.has(key) !== adultFavorites.has(favoriteDraft[index])) return;
   favoriteDraft.splice(from, 1);
   favoriteDraft.splice(index, 0, key);
 }
@@ -395,8 +403,9 @@ function renderFavoriteDraft(key) {
 }
 
 $('edit-favorites').onclick = () => {
-  const live = new Set(catalog.filter(item => item.category === 'live').map(favoriteKey));
-  favoriteDraft = channels.favorites.filter(key => live.has(key));
+  const live = new Map(catalog.filter(item => item.category === 'live').map(item => [favoriteKey(item), item.adult]));
+  adultFavorites = new Set([...live].filter(([, adult]) => adult).map(([key]) => key));
+  favoriteDraft = adultsLast(channels.favorites.filter(key => live.has(key)), key => adultFavorites.has(key));
   pickedFavorite = undefined;
   $('search').value = '';
   renderFavoriteDraft(favoriteDraft[0]);
@@ -410,7 +419,8 @@ $('cards').addEventListener('keydown', event => {
   const key = button.dataset.favoriteKey;
   const direction = event.key === 'ArrowUp' ? -1 : 1;
   const index = favoriteDraft.indexOf(key) + direction;
-  if (index < 0 || index >= favoriteDraft.length) {
+  if (index < 0 || index >= favoriteDraft.length ||
+      (pickedFavorite && adultFavorites.has(pickedFavorite) !== adultFavorites.has(favoriteDraft[index]))) {
     $('confirm-favorites').focus();
   } else if (pickedFavorite) {
     placeFavorite(pickedFavorite, index);
@@ -538,16 +548,17 @@ function renderHome() {
       resume[item.category].push({ ...item, saved });
     }
   }
-  const channels = activity.channels.map(name => live.get(name)).filter(Boolean).slice(0, 10);
+  const channels = adultsLast(activity.channels.map(name => live.get(name)).filter(Boolean).slice(0, 10)
+    .map((item, index) => ({ ...item, rank: index + 1 })));
   const resumeOptions = item => ({ resume: item.saved,
     subtitle: 'Retomar em ' + new Date(item.saved.position * 1000).toISOString().slice(11, 19) });
-  const latest = type => recent[type].sort((a, b) => b.added - a.added).slice(0, 12);
+  const latest = type => adultsLast(recent[type].sort((a, b) => b.added - a.added)).slice(0, 12);
   const noDates = 'A lista ainda não forneceu datas de adição.';
   $('home').replaceChildren(
-    shelf('10 filmes em alta no TMDB', trending.items, trending.message),
-    shelf('Top 10 canais mais assistidos do VibeCast', channels, 'Os canais da sua lista aparecem aqui conforme são assistidos.', (_, index) => ({ rank: index + 1 })),
-    shelf('Continue assistindo a filmes', resume.movie.slice(0, 12), 'Seus filmes em andamento aparecem aqui.', resumeOptions),
-    shelf('Continue assistindo a séries', resume.series.slice(0, 12), 'Suas séries em andamento aparecem aqui.', resumeOptions),
+    shelf('10 filmes em alta no TMDB', adultsLast(trending.items), trending.message),
+    shelf('Top 10 canais mais assistidos do Playdahora', channels, 'Os canais da sua lista aparecem aqui conforme são assistidos.', item => ({ rank: item.rank })),
+    shelf('Continue assistindo a filmes', adultsLast(resume.movie).slice(0, 12), 'Seus filmes em andamento aparecem aqui.', resumeOptions),
+    shelf('Continue assistindo a séries', adultsLast(resume.series).slice(0, 12), 'Suas séries em andamento aparecem aqui.', resumeOptions),
     shelf('Filmes adicionados recentemente', latest('movie'), noDates),
     shelf('Séries adicionadas recentemente', latest('series'), noDates),
     shelf('Canais adicionados recentemente', latest('live'), noDates)

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">VibeCast</string>
-    <string name="title_activity_main">VibeCast</string>
+    <string name="app_name">Playdahora</string>
+    <string name="title_activity_main">Playdahora</string>
     <string name="package_name">com.vibecast.player</string>
     <string name="custom_url_scheme">com.vibecast.player</string>
 </resources>

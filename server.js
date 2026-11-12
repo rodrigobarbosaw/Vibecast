@@ -62,7 +62,7 @@ async function trendingMovies() {
   if (!response?.ok) throw fail(502, 'Os filmes em alta estão temporariamente indisponíveis.');
   const { results } = await response.json();
   const value = { configured: true, items: results.slice(0, 10).map(movie => ({
-    title: movie.title, link: 'https://www.themoviedb.org/movie/' + movie.id,
+    title: movie.title, adult: movie.adult === true, link: 'https://www.themoviedb.org/movie/' + movie.id,
     logo: /^\/[a-zA-Z0-9]+\.jpg$/.test(movie.poster_path || '')
       ? 'https://image.tmdb.org/t/p/w342' + movie.poster_path : ''
   })) };
@@ -345,6 +345,7 @@ async function api(req, path) {
 const assets = new Map([
   ['/', ['public/index.html', 'text/html']],
   ['/style.css', ['public/style.css', 'text/css']],
+  ['/playdahora.png', ['public/playdahora.png', 'image/png']],
   ['/app.js', ['public/app.js', 'text/javascript']],
   ['/catalog.js', ['public/catalog.js', 'text/javascript']],
   ['/config.js', ['public/config.js', 'text/javascript']],
@@ -375,9 +376,10 @@ createServer(async (req, res) => {
     const asset = assets.get(path);
     if (!asset || req.method !== 'GET') throw fail(404, 'Página inexistente.');
     const content = await readFile(asset[0]).catch(() => { throw fail(404, 'Arquivo indisponível.'); });
-    res.writeHead(200, { 'Content-Type': asset[1] + '; charset=utf-8' }).end(content);
+    const type = asset[1].startsWith('text/') ? asset[1] + '; charset=utf-8' : asset[1];
+    res.writeHead(200, { 'Content-Type': type }).end(content);
   } catch (error) {
     res.writeHead(error.status || 500, { 'Content-Type': 'application/json' })
       .end(JSON.stringify({ error: error.status ? error.message : 'Serviço temporariamente indisponível.' }));
   }
-}).listen(port, process.env.HOST || '127.0.0.1', () => console.log('VibeCast em ' + origin));
+}).listen(port, process.env.HOST || '127.0.0.1', () => console.log('Playdahora em ' + origin));
